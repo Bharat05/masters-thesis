@@ -5,6 +5,8 @@ library(dplyr)
 df <- read.csv("C:/Stuff/Google Drive/Declines/df_pca.csv", 
                  header = T, stringsAsFactors = FALSE)
 
+#  244088 
+
 #plotting clean data,individual plots
 for( i in unique(df$leaseNumber)){
   temp_data = filter(df, df$leaseNumber == i )
