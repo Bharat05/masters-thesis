@@ -11,15 +11,16 @@ library(ggplot2)
 library(psych)
 library(stats)
 library(FactoMineR)
-library(factoextra) 
+library(factoextra)
+library(Rlof)
 
 #reading in the file_gas, stringAsFactors to supress column classification 
 # as factor for dates in this case
 
-#file_gas1 <- read.csv("C:/Stuff/Google Drive/Declines/Gas1MM.csv", + 
+#file_gas1 <- read.csv("C:/Stuff/Google Drive/Declines/Gas1MM.csv", 
 # header = T, stringsAsFactors = FALSE)
-file_gas2 <- read.csv("C:/Stuff/Google Drive/Declines/Gas24MM.csv", + 
-                        header = T, stringsAsFactors = FALSE, nrows = 1000)
+file_gas2 <- read.csv("C:/Stuff/Google Drive/Declines/Gas24MM.csv", 
+                      header = T, stringsAsFactors = FALSE, nrows = 1000)
 #file_gas1 <- file_gas1[,1:12]
 file_gas2 <- file_gas2[,1:12]
 
@@ -54,14 +55,15 @@ for( i in unique(file_gas$leaseNumber)){
   # generating plots necessary for calculating fit through stat_smooth
   # using print to see the plots in window
   print(qplot( productionDate, gas_norm,data = temp_data) +
-    stat_smooth(aes(outfit=fit<<-..y..), n = nrow(temp_data), method = loess) +
+    stat_smooth(aes(outfit=fit<<-..y..), n = nrow(temp_data), method = loess, span = .2) +
     labs(title = paste(temp_data$leaseNumber,"lease number", sep =" ")))
   
   quality_index <-  describe(fit - temp_data$gas_norm)
   
+  
   # to catch the error in standard deviation and jump to next lease no
   # storing the relativey good production data in clean_data , using standard deviation of 
-  tryCatch (if(quality_index$sd < .05) clean_data <- rbind(clean_data,temp_data),
+  tryCatch (if(quality_index$sd < .01) clean_data <- rbind(clean_data,temp_data),
     #print(qual$sd)
     finally = next )
     
@@ -154,7 +156,7 @@ for( i in unique(clip_data_with_month_id$leaseNumber)){
       count <- count + 1
     }
   }
-  if(count >= 2){ 
+  if(count >= 4){ 
     #print(count)
     next
     
@@ -163,6 +165,8 @@ for( i in unique(clip_data_with_month_id$leaseNumber)){
     df_pca <- rbind(df_pca,temp_data)
   }
 }
+#remove columns which are not required
+df_pca <- df_pca[,c(-1,-2)]
 write.csv(df_pca, "C:/Stuff/Google Drive/Declines/df_pca.csv")
 
 
@@ -183,9 +187,9 @@ df_pca_ready <- reshape(df_pca_req, timevar ='month_id', idvar ="leaseNumber" ,d
 write.csv(df_pca_ready, "C:/Stuff/Google Drive/Declines/df_pca_ready.csv")
 
 ##Doing PCA
-res.pca <- prcomp(df_pca_ready[,-1])
-
-eig <- (res.pca$sdev)^2
+res.pca2 <- prcomp(df_pca_ready[,c(-1,-2,-3)])
+res.pca1 <- prcomp(df_pca_ready[,c(-1,-2)])
+eig <- (res.pca1$sdev)^2
 
 variance <- eig*100/sum(eig)
 
@@ -195,9 +199,28 @@ eig.prod.active <- data.frame(eig = eig, variance = variance, cumvariance = cumv
 
 head(eig.prod.active)
 
+pca_result_df1 <- data.frame(unclass(res.pca1$rotation[,1:3]))
+pca_result_df2 <- data.frame(unclass(res.pca2$rotation[,1:3]))
 
-pca_result_df <- data.frame(unclass(res.pca$rotation[,1:4]))
-
-ggplot(data=pca_result_df, aes(x=1:48, y = pca_result_df$PC1)) + geom_point()
-
+ggplot(data=pca_result_df1, aes(x=1:48, y = pca_result_df1$PC1)) + geom_point()
+ggplot(data=pca_result_df2, aes(x=1:47, y = pca_result_df2$PC1)) + geom_point()
 var <- get_pca_var(res.pca)
+
+
+## PCA Predicition
+# doesnt include 1st month production
+mat_pca <- pca_result_df[1:8,1:8]
+## any random decline , first 4 months since 4 unknowns
+b <- t(df_pca_ready[60,4:50])
+## get the coefficients
+c <- solve(mat_pca,b[1:8])
+
+pca_predict <- pca_result_df$PC1*c[1] + pca_result_df$PC2*c[2]+
+  pca_result_df$PC3*c[3] + pca_result_df$PC4*c[4] + pca_result_df$PC5*c[5] +
+  pca_result_df$PC6*c[6] + pca_result_df$PC7*c[7] + pca_result_df$PC8*c[8]
+
+plot(1:47, b)
+plot(1:47, pca_predict)
+
+# plot to see the correlation betwwen pca and vairable
+plot(res.pca1$x[,1], df_pca_ready$gas_norm.11)
